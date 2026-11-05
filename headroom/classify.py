@@ -333,6 +333,7 @@ def lighten(command: str, *, budget_mb: int, cpus: int, low_memory: bool,
 
     if not edits:
         return Rewrite(command)
+    changes = list(dict.fromkeys(changes))  # one line per kind of change
     out = command
     for start, end, replacement in sorted(edits, key=lambda e: (e[0], e[1]), reverse=True):
         out = out[:start] + replacement + out[end:]

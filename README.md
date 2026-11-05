@@ -1,5 +1,7 @@
 # headroom
 
+![headroom](docs/banner.png)
+
 **Keeps Hermes alive on small machines.** A `npm install`, a test suite or a build that blows
 past the RAM of a 1-2 GB VPS or a Raspberry Pi normally takes the agent down with it: the
 gateway gets OOM-killed or the box swaps itself into a coma, and your Discord/Telegram bot goes
@@ -17,6 +19,8 @@ headroom selftest: PASS
   kernel OOM-killed it inside headroom-selftest-3f1c9a2e.scope (cgroup oom_kill events: 1)
   this process (pid 6963) was not touched
 ```
+
+![status and selftest](docs/media/status.gif)
 
 ## What it does
 
@@ -88,6 +92,8 @@ which stops a job by its process group.
 
 The status also lists the largest processes and flags the ones Hermes started. On a 2 GB box
 that is often the surprise: a TypeScript language server pair can hold 500 MB.
+
+![explain](docs/media/explain.gif)
 
 ## Settings
 
