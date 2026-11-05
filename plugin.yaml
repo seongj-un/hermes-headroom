@@ -1,0 +1,85 @@
+name: headroom
+label: headroom
+version: "0.1.0"
+manifest_version: 2
+description: >-
+  Memory guard for Hermes on small machines. Heavy shell jobs (package installs, builds, test
+  suites, browsers, sub-agents) wait for a machine-wide slot and enough free RAM, run inside
+  their own memory-capped systemd --user scope with a raised OOM score, get single-worker flags
+  where a stable one exists, and are stopped by a watchdog before the host runs out of memory.
+  When something is killed, the model is told why and how to retry lighter. Hermes itself stays
+  out of the blast radius.
+author: seongj-un
+license: MIT
+homepage: https://github.com/seongj-un/hermes-headroom
+tags: [memory, oom, resources, low-spec, vps, raspberry-pi, systemd, cgroups, guard]
+requires_hermes: ">=0.22.6"
+provides_tools:
+  - headroom_status
+provides_hooks:
+  - pre_llm_call
+provides_middleware:
+  - tool_request
+  - tool_execution
+config_schema:
+  mode:
+    type: str
+    choices: [enforce, observe, "off"]
+    default: enforce
+    label: Mode
+    description: "enforce: queue, cap, lighten and watch heavy jobs. observe: only log what would happen. off: do nothing."
+  max_heavy_jobs:
+    type: int
+    default: 0
+    label: Heavy jobs at once
+    description: "Machine-wide, across every Hermes process and profile. 0 = auto (1 below 4 GB RAM, 2 below 16 GB, else 4)."
+  reserve_mb:
+    type: int
+    default: 0
+    label: Memory kept for Hermes (MB)
+    description: "Never handed to a heavy job. 0 = auto (15% of RAM, 256 MB to 2 GB)."
+  job_memory_max_mb:
+    type: int
+    default: 0
+    label: Memory cap per job (MB)
+    description: "0 = auto: whatever is free when the job starts, minus the reserve."
+  swap_mb:
+    type: int
+    default: 256
+    label: Swap per job (MB)
+    description: "How much swap a job may use beyond its cap. -1 = unlimited (risks thrashing)."
+  min_start_mb:
+    type: int
+    default: 0
+    label: Free memory a job needs to start (MB)
+    description: "Beyond the reserve. 0 = auto (10% of RAM, 192 MB to 1 GB)."
+  queue_timeout_s:
+    type: int
+    default: 300
+    label: Queue timeout (s)
+    description: "How long a heavy command waits for a slot and memory before it is refused with an explanation."
+  critical_mb:
+    type: int
+    default: 0
+    label: Watchdog line (MB)
+    description: "If available memory falls below this, the newest heavy job is stopped. 0 = auto (5% of RAM, 96 to 512 MB)."
+  lighten:
+    type: bool
+    default: true
+    label: Lighten commands
+    description: "Add single-worker flags (jest --runInBand, pytest -n 0, make -jN, cargo -j N, playwright --workers=1) and a Node heap cap. Applied before approval, so you approve what runs."
+  isolate:
+    type: bool
+    default: true
+    label: Isolate in systemd scopes
+    description: "Move heavy jobs into their own memory-capped systemd --user scope. Needs systemd with the memory controller delegated."
+  extra_heavy_patterns:
+    type: list
+    default: []
+    label: Extra heavy commands
+    description: "Regexes matched against each command word sequence, e.g. ^python3? train\\.py"
+  exclude_patterns:
+    type: list
+    default: []
+    label: Never treat as heavy
+    description: "Regexes matched against the whole command."
