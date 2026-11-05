@@ -273,7 +273,7 @@ def lighten(command: str, *, budget_mb: int, cpus: int, low_memory: bool,
     jobs = max(1, min(cpus, budget_mb // 700 if budget_mb > 0 else 1))
     edits: List[Tuple[int, int, str]] = []  # (start, end, replacement) in original coordinates
     changes: List[str] = []
-    node_heap = max(256, round(budget_mb * 0.7)) if budget_mb > 0 else 0
+    node_heap = min(budget_mb, max(128, round(budget_mb * 0.7))) if budget_mb > 0 else 0
 
     for m in result.matches:
         seg = m.segment

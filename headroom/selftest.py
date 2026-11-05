@@ -59,11 +59,14 @@ def run(cap_mb: int = 64) -> Result:
     proc = subprocess.Popen([sys.executable, "-c", _HOG], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             start_new_session=True)
     unit = scope.new_unit_name("selftest")
-    ok, err = scope.adopt([proc.pid], unit, memory_max=cap_mb * MB, swap_max=0,
+    keeper = subprocess.Popen(["sleep", "300"], start_new_session=True,
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    ok, err = scope.adopt([proc.pid, keeper.pid], unit, memory_max=cap_mb * MB, swap_max=0,
                           description="headroom selftest")
     if not ok:
-        proc.kill()
-        proc.wait()
+        for p in (proc, keeper):
+            p.kill()
+            p.wait()
         return Result(False, lines + [f"systemd refused the scope: {err}"])
     cgroup = scope.unit_cgroup(proc.pid)
     probe.raise_oom_score(proc.pid, 900)
@@ -76,12 +79,15 @@ def run(cap_mb: int = 64) -> Result:
     if proc.poll() is None:
         proc.kill()
     proc.wait()
+    oom_kills = max(oom_kills, scope.cgroup_stats(cgroup).get("ev_oom_kill", 0))
+    keeper.kill()
+    keeper.wait()
     scope.reset_failed(unit)
     out = proc.stdout.read().decode() if proc.stdout else ""
     killed = proc.returncode == -9
     lines.append(f"test process: tried to allocate 800 MB inside a {cap_mb} MB scope")
     if killed:
-        lines.append(f"kernel OOM-killed it inside {unit} (oom_kill events seen: {oom_kills or 'after exit'})")
+        lines.append(f"kernel OOM-killed it inside {unit} (cgroup oom_kill events: {oom_kills})")
         lines.append(f"this process (pid {os.getpid()}) was not touched")
         return Result(True, lines)
     lines.append(f"unexpected: exit code {proc.returncode}, output {out.strip()[:80]!r}")

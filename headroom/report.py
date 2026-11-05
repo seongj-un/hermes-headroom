@@ -49,6 +49,7 @@ def snapshot(guard, settings: Settings) -> Dict[str, Any]:
                 {"command": h.get("command"), "running_s": int(time.time() - float(h.get("since", time.time()))),
                  "pid": h.get("pid")} for h in others
             ]
+    data["top_processes"] = probe.top_processes()
     data["recent"] = guard.events.recent(8, kinds={"blocked", "killed", "finished", "queued"})
     return data
 
@@ -84,6 +85,13 @@ def status_text(guard, settings: Settings) -> str:
         lines.append(f"running in another Hermes process: `{job['command']}` {job['running_s']}s")
     if not snap["running_here"] and not snap.get("running_elsewhere"):
         lines.append("no heavy jobs running")
+    top = snap.get("top_processes") or []
+    if top:
+        parts = []
+        for row in top:
+            tag = " [Hermes]" if row["hermes"] else (" [started by Hermes]" if row["started_by_hermes"] else "")
+            parts.append(f"{row['command']} {_mb(row['mb'])}{tag}")
+        lines.append("largest processes: " + "; ".join(parts))
     return "\n".join(lines)
 
 

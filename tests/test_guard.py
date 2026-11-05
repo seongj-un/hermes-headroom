@@ -217,3 +217,18 @@ def test_hermes_process_is_outside_the_scope(tmp_path):
     run(guard, f"{sys.executable} {HOG} 600")
     assert probe.cgroup_of(os.getpid()) == before
     assert "headroom-" not in (before or "")
+
+
+def test_job_label_uses_command_as_written(tmp_path):
+    guard = make_guard(tmp_path, job_memory_max_mb=700)
+    rewritten = guard.rewrite_request("terminal", {"command": "npm run build"})
+    guard.execute(tool_name="terminal", args=rewritten["args"], original_args={"command": "npm run build"},
+                  next_call=lambda a: '{"output": "", "exit_code": 0}')
+    started = [e for e in guard.events.recent(10) if e["kind"] == "started"][-1]
+    assert started["command"] == "npm run build"
+
+
+def test_top_processes_lists_self_user_only():
+    rows = probe.top_processes(limit=3, min_mb=1)
+    assert all(row["pid"] != os.getpid() for row in rows)
+    assert all({"pid", "mb", "command", "hermes", "started_by_hermes"} <= set(row) for row in rows)

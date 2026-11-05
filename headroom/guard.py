@@ -89,10 +89,11 @@ class Job:
     spawned: threading.Event = field(default_factory=threading.Event)
     done: threading.Event = field(default_factory=threading.Event)
     tracker: Optional[threading.Thread] = None
+    display: str = ""  # the command as the model wrote it (before lightening)
 
     @property
     def label(self) -> str:
-        return cls.shorten(self.command, 60)
+        return cls.shorten(self.display or self.command, 60)
 
     def runtime(self) -> float:
         return (self.finished_at or _now()) - self.started
@@ -207,6 +208,7 @@ class Guard:
         cap = s.job_cap(mem_now)
         job = Job(
             command=command, session_id=session_id, task_id=task_id,
+            display=str((original_args or {}).get("command") or command),
             background=bool(args.get("background")), rules=result.rules, kinds=result.kinds,
             isolate=result.isolate and s.isolate, cap_mb=cap, swap_mb=s.swap_cap(), slot=slot,
             preexisting=probe.descendants(os.getpid()),

@@ -359,3 +359,41 @@ def _bus_env() -> Dict[str, str]:
     env = dict(os.environ)
     env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
     return env
+
+
+def top_processes(limit: int = 5, min_mb: int = 40, proc: Path = _PROC) -> List[Dict[str, object]]:
+    """This user's largest processes, flagging the ones Hermes started (LSP servers, browsers,
+    MCP servers, kernels). Those are often the real reason a small box has no headroom."""
+    uid = os.getuid()
+    rows = []
+    hermes_roots: Set[int] = set()
+    for pid in all_pids(proc):
+        try:
+            if (proc / str(pid)).stat().st_uid != uid:
+                continue
+        except OSError:
+            continue
+        argv = cmdline(pid, proc)
+        joined = " ".join(argv)
+        if "hermes_cli" in joined or (argv and os.path.basename(argv[0]) == "hermes"):
+            hermes_roots.add(pid)
+        rss = rss_bytes(pid, proc)
+        if rss >= min_mb * MB:
+            rows.append((rss, pid, argv))
+    tree = children_map(proc)
+    started_by_hermes: Set[int] = set()
+    for root in hermes_roots:
+        started_by_hermes |= descendants(root, tree, proc)
+    out: List[Dict[str, object]] = []
+    me = os.getpid()
+    for rss, pid, argv in sorted((r for r in rows if r[1] != me), reverse=True)[:limit]:
+        name = os.path.basename(argv[0]) if argv else "?"
+        joined = " ".join(argv)
+        if pid in hermes_roots:
+            detail = "hermes gateway" if "gateway run" in joined else "hermes"
+        else:
+            script = next((os.path.basename(a) for a in argv[1:] if a.startswith("/")), "")
+            detail = f"{name} {script}".strip()
+        out.append({"pid": pid, "mb": rss // MB, "name": name, "command": detail[:80],
+                    "hermes": pid in hermes_roots, "started_by_hermes": pid in started_by_hermes})
+    return out
