@@ -11,6 +11,7 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import stat
 import threading
 import time
 from dataclasses import dataclass
@@ -19,13 +20,34 @@ from typing import Callable, Dict, List, Optional
 
 
 def default_dir() -> Path:
+    """``$XDG_RUNTIME_DIR/hermes-headroom`` (per-user, tmpfs). Without a runtime dir, fall
+    back to ``/tmp/hermes-headroom-<uid>`` only if it is a real directory we own with mode
+    0700; a symlink or someone else's directory there is refused."""
     runtime = os.environ.get("XDG_RUNTIME_DIR")
     if runtime and os.path.isdir(runtime) and os.access(runtime, os.W_OK):
         base = Path(runtime) / "hermes-headroom"
     else:
         base = Path("/tmp") / f"hermes-headroom-{os.getuid()}"
-    base.mkdir(mode=0o700, parents=True, exist_ok=True)
+    ensure_private_dir(base)
     return base
+
+
+class UnsafeSlotDir(RuntimeError):
+    pass
+
+
+def ensure_private_dir(path: Path) -> None:
+    try:
+        os.mkdir(path, 0o700)
+    except FileExistsError:
+        pass
+    st = os.lstat(path)
+    if stat.S_ISLNK(st.st_mode) or not stat.S_ISDIR(st.st_mode):
+        raise UnsafeSlotDir(f"{path} is not a plain directory")
+    if st.st_uid != os.getuid():
+        raise UnsafeSlotDir(f"{path} is owned by uid {st.st_uid}, not {os.getuid()}")
+    if stat.S_IMODE(st.st_mode) & 0o077:
+        os.chmod(path, 0o700)
 
 
 @dataclass
@@ -38,6 +60,8 @@ class Slot:
 
     def describe(self, **meta) -> None:
         """Record who holds the slot, for the queue message other sessions see."""
+        if self.fd < 0:
+            return
         info = {"pid": os.getpid(), "since": self.acquired_at, **meta}
         try:
             self.path.with_suffix(".json").write_text(json.dumps(info))
@@ -48,6 +72,8 @@ class Slot:
         if self._released:
             return
         self._released = True
+        if self.fd < 0:
+            return
         try:
             self.path.with_suffix(".json").unlink(missing_ok=True)
         except OSError:
@@ -60,18 +86,31 @@ class Slot:
 
 class SlotPool:
     def __init__(self, directory: Optional[Path] = None) -> None:
-        self.directory = directory or default_dir()
-        self.directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self.unavailable = ""
         self._local = threading.Lock()
+        try:
+            if directory is None:
+                self.directory = default_dir()
+            else:
+                directory.parent.mkdir(parents=True, exist_ok=True)
+                ensure_private_dir(directory)
+                self.directory = directory
+        except (UnsafeSlotDir, OSError) as exc:
+            # Never share lock files through a directory we do not control: run without
+            # cross-process queueing (isolation, caps and the watchdog still apply).
+            self.unavailable = str(exc)
+            self.directory = Path("/nonexistent")
 
     def _path(self, index: int) -> Path:
         return self.directory / f"slot-{index}.lock"
 
     def try_acquire(self, count: int) -> Optional[Slot]:
+        if self.unavailable:
+            return Slot(-1, -1, self.directory / "unqueued", time.time())
         with self._local:
             for index in range(max(1, count)):
                 path = self._path(index)
-                fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+                fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
                 try:
                     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 except OSError:
@@ -83,6 +122,8 @@ class SlotPool:
     def holders(self, count: int) -> List[Dict]:
         """Who holds each busy slot (best effort; metadata is advisory)."""
         found: List[Dict] = []
+        if self.unavailable:
+            return found
         for index in range(max(1, count)):
             meta_path = self._path(index).with_suffix(".json")
             try:

@@ -159,7 +159,10 @@ model: terminal("cd web && npm test")
   largest processes), and the cgroup files of its own scopes and of Hermes' cgroup.
 - **Writes:** `oom_score_adj` of the job's processes (raised only), an event log at
   `<HERMES_HOME>/plugin-data/headroom/events.jsonl`, and slot lock files in
-  `$XDG_RUNTIME_DIR/hermes-headroom/`.
+  `$XDG_RUNTIME_DIR/hermes-headroom/` (fallback `/tmp/hermes-headroom-<uid>`, used only if it is a
+  plain 0700 directory owned by this user; otherwise cross-process queueing is skipped).
+- **Environment:** `busctl`/`systemctl` get only `PATH`, `XDG_RUNTIME_DIR` and
+  `DBUS_SESSION_BUS_ADDRESS`, never the agent's other variables.
 - **Kills:** only processes inside its own scopes (or, without systemd, the process group of a
   job it is tracking), when the watchdog fires.
 - **Network:** none. No telemetry, no credentials.

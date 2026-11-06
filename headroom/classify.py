@@ -100,7 +100,9 @@ def _push(segments: List[Segment], command: str, start: int, end: int) -> None:
     segments.append(Segment(start + lead, start + lead + len(stripped), stripped))
 
 
-_ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=(?:'[^']*'|\"(?:[^\"\\]|\\.)*\"|\S)*\s+")
+# The value alternatives must stay disjoint (bare chars exclude quotes and whitespace);
+# overlapping alternatives backtrack exponentially on input like A=... (ReDoS).
+_ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=(?:'[^']*'|\"(?:[^\"\\]|\\.)*\"|[^\s'\"])*\s+")
 _WRAPPERS = re.compile(
     r"^(?:(?:env(?:\s+-\S+)*|time(?:\s+-p)?|nice(?:\s+-n\s*-?\d+|\s+-\d+)?|"
     r"ionice(?:\s+-c\s*\d+)?(?:\s+-n\s*\d+)?|nohup|exec|command|builtin|stdbuf(?:\s+-\S+)*|"

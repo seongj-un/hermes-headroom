@@ -356,8 +356,11 @@ def _probe_capabilities() -> Capabilities:
 
 
 def _bus_env() -> Dict[str, str]:
-    env = dict(os.environ)
-    env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+    """Only what busctl/systemctl need to find the user bus; never the agent's secrets."""
+    env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+           "XDG_RUNTIME_DIR": os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"}
+    if os.environ.get("DBUS_SESSION_BUS_ADDRESS"):
+        env["DBUS_SESSION_BUS_ADDRESS"] = os.environ["DBUS_SESSION_BUS_ADDRESS"]
     return env
 
 
