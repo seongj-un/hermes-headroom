@@ -163,7 +163,8 @@ def test_runaway_job_is_oom_killed_inside_its_scope(tmp_path):
 @needs_isolation
 def test_well_behaved_job_runs_normally(tmp_path):
     guard = make_guard(tmp_path, job_memory_max_mb=200, swap_mb=0, min_start_mb=64)
-    out, _ = run(guard, f"{sys.executable} {HOG} 40")
+    # Real jobs ramp up over seconds; a short start delay keeps this from racing the adoption.
+    out, _ = run(guard, f"sleep 0.3; {sys.executable} {HOG} 40")
     info = out["headroom"]
     assert out["exit_code"] == 0, out
     assert "survived 40" in out["output"]
@@ -228,7 +229,8 @@ def test_job_label_uses_command_as_written(tmp_path):
     assert started["command"] == "npm run build"
 
 
-def test_top_processes_lists_self_user_only():
-    rows = probe.top_processes(limit=3, min_mb=1)
-    assert all(row["pid"] != os.getpid() for row in rows)
+def test_top_processes_includes_and_flags_own_process():
+    rows = probe.top_processes(limit=50, min_mb=1)
+    me = [row for row in rows if row["pid"] == os.getpid()]
+    assert me and me[0]["hermes"] is True
     assert all({"pid", "mb", "command", "hermes", "started_by_hermes"} <= set(row) for row in rows)

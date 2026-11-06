@@ -179,7 +179,7 @@ cd tests && ../.venv/bin/python -m pytest -q     # 70+ tests; the systemd ones r
 hermes plugins validate .
 ```
 
-`demo/leaky-report` is a tiny Node project whose test fixture needs more than a gigabyte of
+`demo/leaky-report` is a tiny Node project whose test fixture needs about 3.5 GB of
 heap; it is what the demo video runs.
 
 ## License

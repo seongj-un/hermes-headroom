@@ -388,8 +388,9 @@ def top_processes(limit: int = 5, min_mb: int = 40, proc: Path = _PROC) -> List[
     for root in hermes_roots:
         started_by_hermes |= descendants(root, tree, proc)
     out: List[Dict[str, object]] = []
-    me = os.getpid()
-    for rss, pid, argv in sorted((r for r in rows if r[1] != me), reverse=True)[:limit]:
+    # Include our own process: /headroom runs inside the gateway, the biggest Hermes process.
+    hermes_roots.add(os.getpid())
+    for rss, pid, argv in sorted(rows, reverse=True)[:limit]:
         name = os.path.basename(argv[0]) if argv else "?"
         joined = " ".join(argv)
         if pid in hermes_roots:
