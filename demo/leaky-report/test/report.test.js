@@ -1,6 +1,3 @@
-// headroom demo fixture: builds an in-memory "monthly report" before asserting on it.
-// With the default ROWS it needs about 3.5 GB of heap, more than a 2-4 GB VPS running Hermes
-// can spare. ROWS=200000 is the light version.
 const test = require("node:test");
 const assert = require("node:assert");
 

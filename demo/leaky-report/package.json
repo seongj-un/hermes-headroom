@@ -1,8 +1,7 @@
 {
-  "name": "leaky-report",
+  "name": "monthly-report",
   "version": "1.0.0",
   "private": true,
-  "description": "headroom demo: a test suite whose fixture is far too big for a small VPS",
   "scripts": {
     "test": "node --test test/"
   }
